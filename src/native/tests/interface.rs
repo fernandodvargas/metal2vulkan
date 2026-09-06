@@ -348,6 +348,50 @@ attributes #0 = { nounwind }
     }
 }
 
+/// `StencilRefReplacingEXT` is to `FragStencilRefEXT` what `DepthReplacing` is to `FragDepth`: the
+/// declaration that this shader replaces the value. spirv-val does not demand it -- all 6 corpus
+/// sources that write the builtin passed without it -- so the pair below is asserted against
+/// glslang, which emits exactly this capability, extension and mode for `gl_FragStencilRefARB`.
+#[test]
+fn native_fragment_stencil_return_declares_the_replacing_execution_mode() {
+    let ll = r#"
+source_filename = "synth_stencil"
+target datalayout = "e-p:64:64:64"
+target triple = "air64-apple-macosx14.0.0"
+
+define <{ i32 }> @synth_stencil(<4 x float> %position) local_unnamed_addr #0 {
+  %z = extractelement <4 x float> %position, i64 2
+  %i = bitcast float %z to i32
+  %2 = insertvalue <{ i32 }> undef, i32 %i, 0
+  ret <{ i32 }> %2
+}
+
+attributes #0 = { nounwind }
+
+!air.fragment = !{!0}
+!0 = !{ptr @synth_stencil, !1, !3}
+!1 = !{!2}
+!2 = !{!"air.stencil", !"air.arg_type_name", !"uint", !"air.arg_name", !"stencil"}
+!3 = !{!4}
+!4 = !{i32 0, !"air.position", !"air.center", !"air.arg_type_name", !"float4", !"air.arg_name", !"position"}
+"#;
+    let tmp = std::env::temp_dir().join(format!(
+        "metal2vulkan_native_stencil_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::create_dir_all(&tmp);
+    let out = crate::translate_sanitized_native(ll, Stage::Fragment, &tmp).expect("translate");
+    let asm = disassemble(&out).expect("disassemble transformed");
+    let _ = std::fs::remove_dir_all(&tmp);
+    assert!(asm.contains("BuiltIn FragStencilRefEXT"), "{asm}");
+    assert!(asm.contains("OpCapability StencilExportEXT"), "{asm}");
+    assert!(
+        asm.contains(r#"OpExtension "SPV_EXT_shader_stencil_export""#),
+        "{asm}"
+    );
+    assert!(asm.contains("StencilRefReplacingEXT"), "{asm}");
+}
+
 #[test]
 fn native_vertex_viewport_array_index_declares_vulkan_capability() {
     let ll = r#"
@@ -586,6 +630,240 @@ attributes #0 = { nounwind }
     {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
+}
+
+/// Metal vertex amplification and Vulkan multiview are one feature: the draw is rasterized into
+/// several views and the shader is told which one it is running for. Every stage that reads
+/// `[[amplification_id]]` must therefore reach `BuiltIn ViewIndex` -- a plain vertex entry as much
+/// as a fragment one -- **once the caller says the pass has more than one view**.
+///
+/// At the default count of one there is no view to be told about: the amplification id is zero at
+/// every vertex by definition, so the constant is the exact answer rather than the zero-binding
+/// fallthrough this test was originally written against. Both halves are asserted here because they
+/// are the same claim from two sides -- the constant must not appear when a second view exists, and
+/// the builtin must not appear when only one does, since a `ViewIndex` input beside a `Layer`
+/// output is MSL that Metal refuses to compile.
+#[test]
+fn amplification_id_reaches_the_view_index_builtin_in_every_stage_that_declares_it() {
+    let vertex = r#"
+source_filename = "synth_vertex_amplification_id"
+target datalayout = "e-p:64:64:64"
+target triple = "air64-apple-macosx14.0.0"
+
+define <4 x float> @vert(i16 %amp) local_unnamed_addr #0 {
+  %wide = zext i16 %amp to i32
+  %f = uitofp i32 %wide to float
+  %v = insertelement <4 x float> zeroinitializer, float %f, i64 0
+  ret <4 x float> %v
+}
+
+attributes #0 = { nounwind }
+
+!air.vertex = !{!0}
+!0 = !{ptr @vert, !1, !3}
+!1 = !{!2}
+!2 = !{i32 0, !"air.position", !"air.arg_type_name", !"float4", !"air.arg_name", !"pos"}
+!3 = !{!4}
+!4 = !{i32 0, !"air.amplification_id", !"air.arg_type_name", !"ushort", !"air.arg_name", !"amp"}
+"#;
+    let fragment = r#"
+source_filename = "synth_fragment_amplification_id"
+target datalayout = "e-p:64:64:64"
+target triple = "air64-apple-macosx14.0.0"
+
+define i16 @frag(i16 %amp) local_unnamed_addr #0 {
+  ret i16 %amp
+}
+
+attributes #0 = { nounwind }
+
+!air.fragment = !{!0}
+!0 = !{ptr @frag, !1, !3}
+!1 = !{!2}
+!2 = !{!"air.render_target", i32 0, i32 0, !"air.arg_type_name", !"ushort", !"air.arg_name", !"color"}
+!3 = !{!4}
+!4 = !{i32 0, !"air.amplification_id", !"air.arg_type_name", !"ushort", !"air.arg_name", !"amp"}
+"#;
+    let tmp = std::env::temp_dir().join(format!(
+        "metal2vulkan_amplification_id_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::create_dir_all(&tmp);
+    for (stage, ll) in [(Stage::Vertex, vertex), (Stage::Fragment, fragment)] {
+        // One view: no multiview interface at all, and the parameter reads the constant zero.
+        let single = crate::translate_sanitized_native(ll, stage, &tmp)
+            .unwrap_or_else(|e| panic!("translate {stage:?}: {e}"));
+        let single_asm = disassemble(&single).expect("disassemble single-view");
+        assert!(
+            !single_asm.contains("BuiltIn ViewIndex"),
+            "{stage:?} declares ViewIndex for a single-view pass: {single_asm}"
+        );
+        assert!(
+            !single_asm.contains("OpCapability MultiView"),
+            "{stage:?} declares MultiView for a single-view pass: {single_asm}"
+        );
+        tools::spirv_val_bytes(&single, &tmp).expect("spirv-val single-view");
+
+        let options = crate::passes::TransformOptions {
+            vertex_amplification_count: 2,
+            ..crate::passes::TransformOptions::default()
+        };
+        let out = crate::translate_sanitized_native_with_options(ll, stage, &tmp, options)
+            .unwrap_or_else(|e| panic!("translate {stage:?}: {e}"));
+        let module = load_bytes(&out).expect("parse transformed");
+        let view_var = module
+            .annotations
+            .iter()
+            .find_map(|inst| match inst.operands.as_slice() {
+                [
+                    Operand::IdRef(var),
+                    Operand::Decoration(Decoration::BuiltIn),
+                    Operand::BuiltIn(BuiltIn::ViewIndex),
+                ] => Some(*var),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{stage:?} declares no ViewIndex builtin"));
+        // The value the body reads is the builtin, not a constant: a zero binding is exactly the
+        // bug, and it leaves no Input variable behind at all.
+        assert!(
+            module
+                .functions
+                .iter()
+                .flat_map(|function| &function.blocks)
+                .flat_map(|block| &block.instructions)
+                .any(|inst| inst.class.opcode == Op::Load
+                    && inst.operands.first() == Some(&Operand::IdRef(view_var))),
+            "{stage:?} declares ViewIndex but never loads it"
+        );
+        let asm = disassemble(&out).expect("disassemble transformed");
+        assert!(asm.contains("OpCapability MultiView"), "{stage:?}: {asm}");
+        // Only a fragment Input needs the interpolation decoration an integer cannot do without.
+        assert_eq!(
+            matches!(stage, Stage::Fragment),
+            module.annotations.iter().any(|inst| {
+                inst.class.opcode == Op::Decorate
+                    && inst.operands.first() == Some(&Operand::IdRef(view_var))
+                    && inst.operands.get(1) == Some(&Operand::Decoration(Decoration::Flat))
+            }),
+            "{stage:?}: {asm}"
+        );
+        tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// `[[amplification_count]]` is a number the render encoder chose, and Vulkan has no builtin to
+/// read it back from -- so the caller states it and the parameter binds that constant.
+///
+/// Before this it had no binding arm at all. It was in `VERTEX_INPUT_ROLES`, so the unmodelled-role
+/// refusal stayed quiet, and the parameter fell off the end of the chain to the zero binding: 126
+/// corpus vertex modules read an amplification count of zero, which is a count Metal never returns
+/// because the encoder's minimum is one. A count is not a view index, so unlike
+/// `[[amplification_id]]` this one never becomes a builtin at any count.
+#[test]
+fn amplification_count_binds_the_count_the_caller_states() {
+    let ll = r#"
+source_filename = "synth_vertex_amplification_count"
+target datalayout = "e-p:64:64:64"
+target triple = "air64-apple-macosx14.0.0"
+
+define <4 x float> @vert(i16 %count) local_unnamed_addr #0 {
+  %wide = zext i16 %count to i32
+  %f = uitofp i32 %wide to float
+  %v = insertelement <4 x float> zeroinitializer, float %f, i64 0
+  ret <4 x float> %v
+}
+
+attributes #0 = { nounwind }
+
+!air.vertex = !{!0}
+!0 = !{ptr @vert, !1, !3}
+!1 = !{!2}
+!2 = !{i32 0, !"air.position", !"air.arg_type_name", !"float4", !"air.arg_name", !"pos"}
+!3 = !{!4}
+!4 = !{i32 0, !"air.amplification_count", !"air.arg_type_name", !"ushort", !"air.arg_name", !"count"}
+"#;
+    let tmp = std::env::temp_dir().join(format!(
+        "metal2vulkan_amplification_count_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::create_dir_all(&tmp);
+    for count in [1u32, 2, 4] {
+        let options = crate::passes::TransformOptions {
+            vertex_amplification_count: count,
+            ..crate::passes::TransformOptions::default()
+        };
+        let out = crate::translate_sanitized_native_with_options(ll, Stage::Vertex, &tmp, options)
+            .unwrap_or_else(|e| panic!("translate at count {count}: {e}"));
+        let asm = disassemble(&out).expect("disassemble transformed");
+        assert!(
+            !asm.contains("BuiltIn ViewIndex"),
+            "a count is not a view index, at count {count}: {asm}"
+        );
+        assert!(
+            asm.lines().any(|line| line.contains("= OpConstant ")
+                && line.split_whitespace().last() == Some(&count.to_string())),
+            "count {count} is not the constant the parameter reads: {asm}"
+        );
+        tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// The same count answers a fragment, because it is a property of the draw and not of the stage.
+///
+/// `FragRole` modelled `[[amplification_id]]` but had no `[[amplification_count]]` variant at all,
+/// so a fragment declaring it decoded to `FragRole::Other` and the module was refused as carrying a
+/// role with no lowering -- while the binding arm in the stage-input pass was already stage-agnostic
+/// and would have answered it. 4 of the 14579 local corpus sources declare the role on a fragment;
+/// the 2 that read it were refused, and this closes both.
+#[test]
+fn fragment_amplification_count_binds_the_same_count_the_vertex_stage_does() {
+    let ll = r#"
+source_filename = "synth_fragment_amplification_count"
+target datalayout = "e-p:64:64:64"
+target triple = "air64-apple-macosx14.0.0"
+
+define i32 @frag(i16 %count) local_unnamed_addr #0 {
+  %wide = zext i16 %count to i32
+  ret i32 %wide
+}
+
+attributes #0 = { nounwind }
+
+!air.fragment = !{!0}
+!0 = !{ptr @frag, !1, !3}
+!1 = !{!2}
+!2 = !{!"air.render_target", i32 0, i32 0, !"air.arg_type_name", !"uint"}
+!3 = !{!4}
+!4 = !{i32 0, !"air.amplification_count", !"air.arg_type_name", !"ushort", !"air.arg_name", !"count"}
+"#;
+    let tmp = std::env::temp_dir().join(format!(
+        "metal2vulkan_frag_amplification_count_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::create_dir_all(&tmp);
+    for count in [1u32, 2, 4] {
+        let options = crate::passes::TransformOptions {
+            vertex_amplification_count: count,
+            ..crate::passes::TransformOptions::default()
+        };
+        let out =
+            crate::translate_sanitized_native_with_options(ll, Stage::Fragment, &tmp, options)
+                .unwrap_or_else(|e| panic!("translate at count {count}: {e}"));
+        let asm = disassemble(&out).expect("disassemble transformed");
+        assert!(
+            !asm.contains("BuiltIn ViewIndex"),
+            "a count is not a view index, at count {count}: {asm}"
+        );
+        assert!(
+            asm.lines().any(|line| line.contains("= OpConstant ")
+                && line.split_whitespace().last() == Some(&count.to_string())),
+            "count {count} is not the constant the parameter reads: {asm}"
+        );
+        tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
@@ -923,6 +1201,12 @@ attributes #0 = { nounwind }
     assert!(asm.contains("BuiltIn PrimitiveId"), "{asm}");
     assert!(asm.contains("OpEntryPoint Fragment"), "{asm}");
     assert!(asm.contains("OpLoad"), "{asm}");
+    // `PrimitiveId` is enabled by any of `Geometry`, `Tessellation`, `RayTracingKHR` or
+    // `MeshShadingEXT`. Declaring a capability is asking a consumer to enable the feature behind
+    // it, and Metal has no geometry stage at all, so `geometryShader` is the one disjunct no
+    // Metal-backed implementation can grant. See `passes::module_cleanup`.
+    assert!(asm.contains("OpCapability Tessellation"), "{asm}");
+    assert!(!asm.contains("OpCapability Geometry"), "{asm}");
     assert!(
         !asm.lines()
             .any(|line| line.contains("OpUndef") && line.contains("%1")),
@@ -1895,8 +2179,109 @@ target triple = "spirv-unknown-vulkan1.2"
     }
 }
 
+/// Every member of the AIR execution-group family lowers, for BOTH group widths and under the
+/// `dispatch_` spelling.
+///
+/// Metal's quadgroup is four threads and its simdgroup thirty-two, and each of the family's facts is
+/// one derivation over that width. Written per group, `air.quadgroups_per_threadgroup` was the
+/// member nobody had copied the derivation for -- a kernel declaring it was rejected outright, and a
+/// gated one read a zero where the hardware had a count. The two widths must therefore appear here
+/// together, so a member cannot be added for one and forgotten for the other.
 #[test]
-fn native_kernel_map_screen_to_physical_1x1_map_lowers_to_zero() {
+fn native_kernel_execution_group_family_lowers_for_both_widths() {
+    let ll = r#"
+target triple = "spirv-unknown-vulkan1.2"
+	define void @main(i32 %quad_lane, i32 %quad_group, i32 %quads, i32 %lane, i32 %simd_group, i32 %simds, i32 %simd_width) {
+	entry:
+	  %a = add i32 %quad_lane, %quad_group
+	  %b = add i32 %a, %quads
+	  %c = add i32 %b, %lane
+	  %d = add i32 %c, %simd_group
+	  %e = add i32 %d, %simds
+	  %f = add i32 %e, %simd_width
+	  %ok = icmp uge i32 %f, 0
+	  ret void
+	}
+
+	!air.kernel = !{!0}
+	!0 = !{ptr @main, !1, !2}
+	!1 = !{}
+	!2 = !{!3, !4, !5, !6, !7, !8, !9}
+	!3 = !{i32 0, !"air.thread_index_in_quadgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"quad_lane"}
+	!4 = !{i32 1, !"air.quadgroup_index_in_threadgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"quad_group"}
+	!5 = !{i32 2, !"air.quadgroups_per_threadgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"quads"}
+	!6 = !{i32 3, !"air.thread_index_in_simdgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"lane"}
+	!7 = !{i32 4, !"air.simdgroup_index_in_threadgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"simd_group"}
+	!8 = !{i32 5, !"air.dispatch_simdgroups_per_threadgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"simds"}
+	!9 = !{i32 6, !"air.threads_per_simdgroup", !"air.arg_type_name", !"uint", !"air.arg_name", !"simd_width"}
+	"#;
+    let module = load_bytes(emit_vulkan_spirv(ll).expect("native emit")).expect("load native spv");
+    let out = passes::transform(
+        module,
+        Stage::Kernel,
+        None,
+        None,
+        meta::parse_air_kernel_meta(ll).as_ref(),
+        meta::entry_name(ll, "kernel").as_deref(),
+    )
+    .expect("interface transform")
+    .assemble()
+    .iter()
+    .flat_map(|w| w.to_le_bytes())
+    .collect::<Vec<_>>();
+    let asm = disassemble(&out).expect("disassemble transformed");
+    // No parameter may fall through to the zero/undef binding: that is the silent read this family
+    // exists to avoid.
+    assert!(!asm.contains("OpUndef"), "{asm}");
+    // A lane index is the threadgroup index masked to the group width, a group index is that index
+    // divided by it, and a group count rounds the local size up by it -- all exact, because every
+    // width is a power of two. Both widths must appear for each, or one group is unlowered.
+    let mut constants = std::collections::HashMap::new();
+    for line in asm.lines().map(str::trim) {
+        let Some((id, rest)) = line.split_once(" = Op") else {
+            continue;
+        };
+        let Some(last) = rest.split_whitespace().last() else {
+            continue;
+        };
+        // A divisor is emitted through the pass that keeps a specialized local size from dividing by
+        // zero, so it reaches OpUDiv as `OpSelect %cond %1 %width`. The width is the false arm.
+        let value = if rest.starts_with("Constant ") {
+            last.parse::<u32>().ok()
+        } else if rest.starts_with("Select ") {
+            constants.get(last).copied()
+        } else {
+            None
+        };
+        if let Some(value) = value {
+            constants.insert(id.to_string(), value);
+        }
+    }
+    let operand_values = |op: &str| {
+        asm.lines()
+            .filter(|line| line.contains(&format!(" = {op} ")))
+            .filter_map(|line| constants.get(line.split_whitespace().last()?).copied())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    assert_eq!(
+        operand_values("OpBitwiseAnd"),
+        [3, 31].into_iter().collect(),
+        "a lane index is masked to its own group's width\n{asm}"
+    );
+    assert_eq!(
+        operand_values("OpShiftRightLogical"),
+        [2, 5].into_iter().collect(),
+        "a group index divides by its own group's width\n{asm}"
+    );
+    assert_eq!(
+        operand_values("OpUDiv"),
+        [4, 32].into_iter().collect(),
+        "a group count divides by its own group's width\n{asm}"
+    );
+}
+
+#[test]
+fn native_kernel_map_screen_to_physical_uniform_map_is_the_identity() {
     let ll = r#"
 target triple = "spirv-unknown-vulkan1.2"
 
@@ -1927,8 +2312,10 @@ declare <2 x float> @air.map_screen_to_physical_coordinates.v2f32.p2i8.i32(<2 x 
     let _ = std::fs::create_dir_all(&tmp);
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&spv).expect("disassemble");
-    assert!(asm.contains("OpCompositeConstruct"), "{asm}");
-    assert!(!asm.contains("OpCopyObject"), "{asm}");
+    // A uniform rate-1.0 map makes the physical grid the screen grid, so the screen coordinate
+    // passes through unchanged - the same direction its inverse already answered. Metal agrees on
+    // device; see `lower_map_screen_to_physical`.
+    assert!(asm.contains("OpCopyObject"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
     assert!(!asm.contains("map_screen_to_physical"), "{asm}");
     if std::process::Command::new("spirv-val")
@@ -2129,4 +2516,150 @@ entry:
     {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
+}
+
+/// A fragment entry gets the execution-group facts that do not need a threadgroup, and is refused
+/// the two that do.
+///
+/// Metal's simdgroup is the same thirty-two threads in a fragment shader as in a kernel, and this
+/// translator states a lane's index inside it off `SubgroupLocalInvocationId` -- a builtin with no
+/// workgroup in it. The family was nevertheless listed for the kernel alone, so 9 of the 14579 local
+/// corpus sources were refused for declaring `[[thread_index_in_simdgroup]]` at a stage that could
+/// have answered it. Which simdgroup inside the threadgroup, and how many the threadgroup holds,
+/// stay refused: a fragment has no threadgroup, and a zero would be an invented answer.
+#[test]
+fn native_fragment_answers_the_group_facts_and_refuses_the_threadgroup_ones() {
+    let entry = |role: &str, arg: &str| {
+        format!(
+            r#"
+source_filename = "synth_fragment_execution_group"
+target datalayout = "e-p:64:64:64"
+target triple = "air64-apple-macosx14.0.0"
+
+define i32 @frag(i32 %{arg}) local_unnamed_addr #0 {{
+entry:
+  %next = add i32 %{arg}, 1
+  ret i32 %next
+}}
+
+attributes #0 = {{ nounwind }}
+
+!air.fragment = !{{!0}}
+!0 = !{{ptr @frag, !1, !3}}
+!1 = !{{!2}}
+!2 = !{{!"air.render_target", i32 0, i32 0, !"air.arg_type_name", !"uint"}}
+!3 = !{{!4}}
+!4 = !{{i32 0, !"{role}", !"air.arg_type_name", !"uint", !"air.arg_name", !"{arg}"}}
+"#
+        )
+    };
+    let tmp = std::env::temp_dir().join(format!(
+        "metal2vulkan_fragment_execution_group_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::create_dir_all(&tmp);
+
+    let spv = crate::translate_sanitized_native(
+        &entry("air.thread_index_in_simdgroup", "lane"),
+        Stage::Fragment,
+        &tmp,
+    )
+    .expect("a fragment lane index lowers");
+    let asm = disassemble(&spv).expect("disassemble");
+    assert!(asm.contains("OpEntryPoint Fragment"), "{asm}");
+    assert!(asm.contains("BuiltIn SubgroupLocalInvocationId"), "{asm}");
+    // An integer fragment input cannot be interpolated, so the lane variable must be Flat.
+    assert!(asm.contains("Flat"), "{asm}");
+    assert!(asm.contains("OpBitwiseAnd"), "{asm}");
+    assert!(!asm.contains("BuiltIn LocalInvocationIndex"), "{asm}");
+
+    let spv = crate::translate_sanitized_native(
+        &entry("air.threads_per_simdgroup", "width"),
+        Stage::Fragment,
+        &tmp,
+    )
+    .expect("a fragment group width lowers");
+    let asm = disassemble(&spv).expect("disassemble");
+    assert!(
+        asm.lines()
+            .any(|line| line.contains("OpConstant ") && line.trim_end().ends_with(" 32")),
+        "the group's width is its width at any stage\n{asm}"
+    );
+
+    for (role, arg) in [
+        ("air.simdgroup_index_in_threadgroup", "group"),
+        ("air.simdgroups_per_threadgroup", "groups"),
+    ] {
+        let err = crate::translate_sanitized_native(&entry(role, arg), Stage::Fragment, &tmp)
+            .expect_err("a fragment has no threadgroup to count groups in");
+        assert!(
+            err.to_string().contains(role),
+            "the refusal names the role it could not answer: {err}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// An unmodelled entry-parameter role is refused for the value the shader would read, so a
+/// parameter nothing reads is not refused.
+///
+/// The refusal exists because binding a zero for a role the emitter cannot answer gives the body a
+/// value the hardware would have supplied, in a module that validates and reflects as though nothing
+/// were missing. Its premise is that the zero reaches an instruction. Metal states the same fact on
+/// the declaration as `air.arg_unused`, but the emitted module's own use list is the exact form of
+/// it: the local corpus declares a role with no lowering on a parameter no instruction mentions, and
+/// refusing those reported a missing value where there is no reader.
+///
+/// The role here is `air.render_target_array_index` on a *kernel* entry, which is the only shape
+/// left in the 14579 local corpus that still refuses this way (4 sources). It used to be
+/// `air.amplification_count` on a fragment, but that role is modelled now: the count is a property
+/// of the draw, so the constant the vertex stage binds answers a fragment too.
+#[test]
+fn native_an_unmodelled_role_on_an_unread_parameter_is_not_refused() {
+    const READS_IT: &str = "  %read = zext i32 %eye to i64\n  store i64 %read, ptr addrspace(1) %out, align 8\n  ret void";
+    let entry = |body: &str| {
+        format!(
+            r#"
+source_filename = "synth_unread_unmodelled_role"
+target datalayout = "e-p:64:64:64"
+target triple = "air64-apple-macosx14.0.0"
+
+define void @kern(ptr addrspace(1) %out, i32 %eye) local_unnamed_addr #0 {{
+entry:
+{body}
+}}
+
+attributes #0 = {{ nounwind }}
+
+!air.kernel = !{{!0}}
+!0 = !{{ptr @kern, !1, !2}}
+!1 = !{{}}
+!2 = !{{!3, !4}}
+!3 = !{{i32 0, !"air.buffer", !"air.location_index", i32 0, i32 1, !"air.read_write", !"air.address_space", i32 1, !"air.arg_type_size", i32 8, !"air.arg_type_align_size", i32 8, !"air.arg_type_name", !"ulong", !"air.arg_name", !"out"}}
+!4 = !{{i32 1, !"air.render_target_array_index", !"air.arg_type_name", !"uint", !"air.arg_name", !"eye"}}
+"#
+        )
+    };
+    let tmp = std::env::temp_dir().join(format!(
+        "metal2vulkan_unread_unmodelled_role_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::create_dir_all(&tmp);
+
+    let spv = crate::translate_sanitized_native(
+        &entry("  store i64 7, ptr addrspace(1) %out, align 8\n  ret void"),
+        Stage::Kernel,
+        &tmp,
+    )
+    .expect("a role nothing reads supplies no value to refuse");
+    let asm = disassemble(&spv).expect("disassemble");
+    assert!(asm.contains("OpEntryPoint GLCompute"), "{asm}");
+
+    let err = crate::translate_sanitized_native(&entry(READS_IT), Stage::Kernel, &tmp)
+        .expect_err("the same role, read, is a value the emitter would answer with a zero");
+    assert!(
+        err.to_string().contains("air.render_target_array_index"),
+        "the refusal names the role whose value is missing: {err}"
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
 }

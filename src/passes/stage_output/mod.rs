@@ -417,6 +417,12 @@ pub(in crate::passes) fn rewrite_return(
         .and_then(|d| d.result_type)
         .ok_or_else(|| "entry function has no result type".to_string())?;
 
+    // A vertex output variable is half of a cross-stage linkage contract, so every member AIR
+    // declares has to reach the module even when the shader leaves its value undefined. A fragment
+    // output is a write to an attachment, and an attachment nothing writes is better left unwritten
+    // than written with garbage.
+    let declared_outputs_must_be_written = matches!(stage, Stage::Vertex);
+
     enum OutputWrite {
         Direct {
             var: Word,
@@ -451,15 +457,31 @@ pub(in crate::passes) fn rewrite_return(
     }
 
     impl OutputWrite {
-        fn stores(&self, ctx: &mut Ctx, retval: Word) -> Vec<Instruction> {
+        /// The stores this output needs, or none when the value is statically undefined and
+        /// `declared_outputs_must_be_written` says the variable may go with it.
+        ///
+        /// Skipping the store leaves the Output variable unreferenced, and `module_cleanup`'s
+        /// unreferenced-global rule then removes it — variable, `Location` decoration and
+        /// entry-point interface entry together. For a VERTEX output that is a linkage contract
+        /// broken: the fragment stage translated from the same Metal varying struct declares the
+        /// matching Input, and Vulkan requires every consumed input to have a producing output at
+        /// that `Location`. AIR declares the member because Metal declares it; that the shader
+        /// leaves it undefined makes its VALUE undefined, not its existence.
+        fn stores(
+            &self,
+            ctx: &mut Ctx,
+            retval: Word,
+            declared_outputs_must_be_written: bool,
+        ) -> Vec<Instruction> {
             let mut stores = Vec::new();
+            let skip_undef = !declared_outputs_must_be_written;
             let (var, value, src_ty, dst_ty) = match *self {
                 OutputWrite::Direct {
                     var,
                     src_ty,
                     dst_ty,
                 } => {
-                    if value_is_statically_undef(ctx, retval) {
+                    if skip_undef && value_is_statically_undef(ctx, retval) {
                         return stores;
                     }
                     (var, retval, src_ty, dst_ty)
@@ -470,7 +492,7 @@ pub(in crate::passes) fn rewrite_return(
                     src_ty,
                     dst_ty,
                 } => {
-                    if composite_member_is_statically_undef(ctx, retval, member) {
+                    if skip_undef && composite_member_is_statically_undef(ctx, retval, member) {
                         return stores;
                     }
                     let ext = ctx.module.fresh_id();
@@ -490,7 +512,9 @@ pub(in crate::passes) fn rewrite_return(
                 } => {
                     let ext = match member {
                         Some(member) => {
-                            if composite_member_is_statically_undef(ctx, retval, member) {
+                            if skip_undef
+                                && composite_member_is_statically_undef(ctx, retval, member)
+                            {
                                 return stores;
                             }
                             let ext = ctx.module.fresh_id();
@@ -503,7 +527,7 @@ pub(in crate::passes) fn rewrite_return(
                             ext
                         }
                         None => {
-                            if value_is_statically_undef(ctx, retval) {
+                            if skip_undef && value_is_statically_undef(ctx, retval) {
                                 return stores;
                             }
                             retval
@@ -949,7 +973,7 @@ pub(in crate::passes) fn rewrite_return(
     for (bi, ii, retval) in ret_locs.into_iter().rev() {
         let mut replacement = Vec::new();
         for output in &outputs {
-            replacement.extend(output.stores(ctx, retval));
+            replacement.extend(output.stores(ctx, retval, declared_outputs_must_be_written));
         }
         if ctx.uses_fragment_imageblock {
             replacement.push(Instruction::new(
