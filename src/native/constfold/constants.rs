@@ -33,10 +33,8 @@ pub(in crate::native) fn module_scalar_constants(
             Op::ConstantFalse => {
                 out.insert(rid, 0);
             }
-            Op::ConstantNull => {
-                if inst.result_type.is_some_and(|t| int_types.contains(&t)) {
-                    out.insert(rid, 0);
-                }
+            Op::ConstantNull if inst.result_type.is_some_and(|t| int_types.contains(&t)) => {
+                out.insert(rid, 0);
             }
             Op::Constant => {
                 if !inst.result_type.is_some_and(|t| int_types.contains(&t)) {

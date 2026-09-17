@@ -78,10 +78,8 @@ impl Emitter {
             return Ok(());
         }
         match self.resolve_type(ty)? {
-            LlType::Float | LlType::Int(32) => {
-                if base_offset + 4 <= byte_limit {
-                    out.push((base_offset, path.clone(), self.resolve_type(ty)?));
-                }
+            LlType::Float | LlType::Int(32) if base_offset + 4 <= byte_limit => {
+                out.push((base_offset, path.clone(), self.resolve_type(ty)?));
             }
             LlType::Vector(elem, lanes) => {
                 let elem = self.resolve_type(&elem)?;

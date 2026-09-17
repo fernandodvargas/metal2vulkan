@@ -2798,30 +2798,28 @@ fn owned_pointer_construction_error(
                 );
             }
         }
-        Op::ConvertUToPtr => {
+        Op::ConvertUToPtr
             if instruction
                 .result_type
                 .and_then(|ty| pointer_type_shape(ty, definitions))
                 .is_none()
-                || operand_type(0).is_none_or(|ty| !integer_scalar(ty))
-            {
-                return Some(
-                    "native emitter: owned OpConvertUToPtr requires a pointer result and integer-scalar input"
-                        .to_string(),
-                );
-            }
+                || operand_type(0).is_none_or(|ty| !integer_scalar(ty)) =>
+        {
+            return Some(
+                "native emitter: owned OpConvertUToPtr requires a pointer result and integer-scalar input"
+                    .to_string(),
+            );
         }
-        Op::ConvertPtrToU => {
+        Op::ConvertPtrToU
             if instruction.result_type.is_none_or(|ty| !integer_scalar(ty))
                 || operand_type(0)
                     .and_then(|ty| pointer_type_shape(ty, definitions))
-                    .is_none()
-            {
-                return Some(
-                    "native emitter: owned OpConvertPtrToU requires an integer-scalar result and pointer input"
-                        .to_string(),
-                );
-            }
+                    .is_none() =>
+        {
+            return Some(
+                "native emitter: owned OpConvertPtrToU requires an integer-scalar result and pointer input"
+                    .to_string(),
+            );
         }
         Op::AtomicLoad
         | Op::AtomicStore
@@ -4493,13 +4491,13 @@ fn owned_composite_instruction_error(
     value_types: &HashMap<Word, Word>,
 ) -> Result<(), String> {
     match instruction.class.opcode {
-        Op::CompositeConstruct | Op::ConstantComposite | Op::SpecConstantComposite => {
-            if !composite_constituents_match(instruction, definitions, value_types) {
-                return Err(format!(
-                    "native emitter: owned {:?} constituents do not match its result type",
-                    instruction.class.opcode
-                ));
-            }
+        Op::CompositeConstruct | Op::ConstantComposite | Op::SpecConstantComposite
+            if !composite_constituents_match(instruction, definitions, value_types) =>
+        {
+            return Err(format!(
+                "native emitter: owned {:?} constituents do not match its result type",
+                instruction.class.opcode
+            ));
         }
         Op::CompositeExtract => {
             let [Operand::IdRef(composite), indices @ ..] = instruction.operands.as_slice() else {
