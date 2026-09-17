@@ -9121,6 +9121,11 @@ mod tests {
     /// so that the day the gap closes this test says so rather than the owned check quietly becoming
     /// redundant. What the owned check rejects is covered by
     /// `owned_module_rejects_derivatives_from_non_fragment_call_trees` above.
+    ///
+    /// The silence is a property of the validator release, not of the module: SPIRV-Tools v2026.1
+    /// (Vulkan SDK 1.4.341.0) still rejects it ("Derivative instructions require
+    /// DerivativeGroupQuadsKHR or DerivativeGroupLinearKHR execution mode for GLCompute ...").
+    /// A validator older than v2026.3 must therefore reject, and the tripwire applies from v2026.3.
     #[test]
     fn owned_derivative_execution_model_check_is_not_backed_by_vulkan_validation() {
         let module = module_with_composite_instruction(Instruction::new(
@@ -9144,12 +9149,35 @@ mod tests {
         ));
         let validation = crate::tools::spirv_val_bytes(&bytes, &tmp);
         let _ = std::fs::remove_dir(&tmp);
+        let release = spirv_val_release();
+        if release.is_some_and(|release| release < (2026, 3)) {
+            let err = validation.expect_err(
+                "a spirv-val older than v2026.3 enforces the Fragment-only derivative rule",
+            );
+            assert!(
+                err.contains("Derivative instructions require"),
+                "spirv-val {release:?} rejected the module for another reason: {err}"
+            );
+            return;
+        }
         assert!(
             validation.is_ok(),
-            "spirv-val now rejects a derivative reachable from GLCompute, so the owned check has a \
-             second line of defence behind it; say so here rather than leaving this note stale: \
-             {validation:?}"
+            "spirv-val {release:?} now rejects a derivative reachable from GLCompute, so the owned \
+             check has a second line of defence behind it; say so here rather than leaving this \
+             note stale: {validation:?}"
         );
+    }
+
+    /// `(year, release)` of the `spirv-val` on this host, from `SPIRV-Tools v2026.1 <hash>`.
+    fn spirv_val_release() -> Option<(u32, u32)> {
+        let (stdout, _) = crate::tools::run("spirv-val", &["--version"]).ok()?;
+        let text = String::from_utf8_lossy(&stdout);
+        let version = text
+            .split_whitespace()
+            .find_map(|word| word.strip_prefix('v'))?;
+        let (year, rest) = version.split_once('.')?;
+        let release: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        Some((year.parse().ok()?, release.parse().ok()?))
     }
 
     #[test]
