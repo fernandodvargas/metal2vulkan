@@ -1475,9 +1475,43 @@ mod platform {
             .chunks_exact(4)
             .map(|word| u32::from_le_bytes(word.try_into().expect("four-byte chunk")))
             .collect::<Vec<_>>();
+        // A capability the device has not enabled makes the module invalid, and a driver is not
+        // obliged to refuse it gracefully: RADV (Mesa 25.2.8) advertises VK_EXT_shader_atomic_float
+        // without `shaderBufferFloat32AtomicAdd`, accepts the module, and ACO aborts the process on
+        // `buffer_atomic_add_f32` while building the pipeline.
+        if !context.shader_buffer_float32_atomic_add
+            && declares_capability(&words, CAPABILITY_ATOMIC_FLOAT32_ADD_EXT)
+        {
+            return Err(format!(
+                "{label} module declares AtomicFloat32AddEXT; Vulkan device does not support \
+                 shaderBufferFloat32AtomicAdd"
+            ));
+        }
         let shader_info = vk::ShaderModuleCreateInfo::default().code(&words);
         unsafe { context.device.create_shader_module(&shader_info, None) }
             .map_err(|error| format!("create {label} shader module: {error}"))
+    }
+
+    /// SPIR-V `Capability::AtomicFloat32AddEXT` (`SPV_EXT_shader_atomic_float_add`).
+    pub(super) const CAPABILITY_ATOMIC_FLOAT32_ADD_EXT: u32 = 6033;
+
+    /// Whether the module's leading `OpCapability` section names `capability`. Capabilities are
+    /// the first instructions after the five-word header, so the scan stops at the first other
+    /// opcode; a malformed word count ends it too.
+    pub(super) fn declares_capability(words: &[u32], capability: u32) -> bool {
+        const OP_CAPABILITY: u32 = 17;
+        let mut at = 5;
+        while let Some(&word) = words.get(at) {
+            let (count, opcode) = ((word >> 16) as usize, word & 0xffff);
+            if opcode != OP_CAPABILITY || count < 2 {
+                return false;
+            }
+            if words.get(at + 1) == Some(&capability) {
+                return true;
+            }
+            at += count;
+        }
+        false
     }
 
     fn create_compute_pipeline(
@@ -2341,6 +2375,7 @@ mod platform {
         shader_int64: bool,
         shader_subgroup_extended_types: bool,
         shader_demote_to_helper_invocation: bool,
+        shader_buffer_float32_atomic_add: bool,
         multisample_array_image: bool,
         max_sampler_anisotropy: f32,
     }
@@ -2675,6 +2710,7 @@ mod platform {
                 shader_int64: on(core.shader_int64),
                 shader_subgroup_extended_types: on(supported_12.shader_subgroup_extended_types),
                 shader_demote_to_helper_invocation,
+                shader_buffer_float32_atomic_add,
                 multisample_array_image,
                 max_sampler_anisotropy,
             })
@@ -2696,6 +2732,7 @@ mod platform {
                 "shader_int64": self.shader_int64,
                 "shader_subgroup_extended_types": self.shader_subgroup_extended_types,
                 "shader_demote_to_helper_invocation": self.shader_demote_to_helper_invocation,
+                "shader_buffer_float32_atomic_add": self.shader_buffer_float32_atomic_add,
                 "multisample_array_image": self.multisample_array_image,
                 "sampler_anisotropy": self.sampler_anisotropy,
                 "sample_rate_shading": self.sample_rate_shading,
@@ -6730,6 +6767,10 @@ mod tests {
         // but a translated module and its reflection -- no authored case, no resources, no
         // dispatch. If the layout this builds ever drifts from the executor's, the sweep's verdicts
         // stop being transferable, which is why both come from `pipeline_layout_objects`.
+        //
+        // The fixture's `atomic_float` subtract declares `AtomicFloat32AddEXT`. A device without
+        // `shaderBufferFloat32AtomicAdd` (RADV) must refuse it before the driver sees it; that
+        // refusal is the only other acceptable answer.
         let ll = include_str!("../fixtures/public/kernel_atomic_xor_and_subtract.ll");
         let scratch = crate::ScratchDir::new("compile-only-kernel").expect("scratch");
         let (spv, reflection) = metal2vulkan::translate_sanitized_native_reflected(
@@ -6739,7 +6780,30 @@ mod tests {
             metal2vulkan::passes::TransformOptions::default(),
         )
         .expect("translate the fixture");
-        compile_kernel_pipeline(&reflection, &spv).expect("driver accepts the translated kernel");
+        match compile_kernel_pipeline(&reflection, &spv) {
+            Ok(()) => {}
+            Err(error) if error.contains("does not support shaderBufferFloat32AtomicAdd") => {}
+            Err(error) => panic!("driver accepts the translated kernel: {error}"),
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn capability_scan_reads_only_the_leading_capability_section() {
+        use platform::{declares_capability, CAPABILITY_ATOMIC_FLOAT32_ADD_EXT as ATOMIC_ADD};
+        const HEADER: [u32; 5] = [0x0723_0203, 0x0001_0500, 0, 64, 0];
+        let capability = |value| [(2 << 16) | 17, value];
+        let module = |body: &[u32]| HEADER.iter().chain(body).copied().collect::<Vec<_>>();
+        // Shader, then AtomicFloat32AddEXT.
+        let declared = module(&[capability(1), capability(ATOMIC_ADD)].concat());
+        assert!(declares_capability(&declared, ATOMIC_ADD));
+        assert!(!declares_capability(&declared, 11));
+        // The same operand after the capability section (an OpExtension word) is not a capability.
+        let later = module(&[&capability(1)[..], &[(3 << 16) | 10, ATOMIC_ADD, 0][..]].concat());
+        assert!(!declares_capability(&later, ATOMIC_ADD));
+        // A zero word count cannot loop.
+        assert!(!declares_capability(&module(&[17, ATOMIC_ADD]), ATOMIC_ADD));
+        assert!(!declares_capability(&HEADER[..3], ATOMIC_ADD));
     }
 
     #[test]
