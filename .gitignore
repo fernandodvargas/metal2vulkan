@@ -48,3 +48,6 @@ __pycache__/
 
 # Bug reports from reims-vgpu
 bugs/
+
+# MCP
+.mcp.json
