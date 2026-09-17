@@ -143,7 +143,7 @@ pub fn run_with_timeout(
     }
 }
 
-fn tool_bin(cmd: &str) -> PathBuf {
+pub(crate) fn tool_bin(cmd: &str) -> PathBuf {
     if let Some(path) = crate::env_vars::tool_path_override(cmd) {
         return PathBuf::from(path);
     }
@@ -436,6 +436,41 @@ pub fn spirv_val_bytes(spv: &[u8], tmp: &Path) -> Result<(), String> {
     result
 }
 
+/// Whether tests can validate with `spirv-val`, resolved the same way [`spirv_val`] resolves it
+/// (`METAL2VULKAN_SPIRV_VAL`, the known tool dirs, then `PATH`), and probed once per process.
+///
+/// A missing validator makes a test skip its validation step, and that skip is announced once on
+/// the real stderr (not the per-test captured one) so a green run cannot hide that nothing was
+/// validated. A validator the caller named explicitly is different: if `METAL2VULKAN_SPIRV_VAL`
+/// is set but cannot report its version, every caller panics instead of skipping, since the
+/// caller asked for validation and would otherwise get a run that validated nothing.
+#[cfg(test)]
+pub(crate) fn spirv_val_available() -> bool {
+    static AVAILABLE: OnceLock<bool> = OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        let probe = run("spirv-val", &["--version"]);
+        if let Some(path) = crate::env_vars::tool_path_override("spirv-val") {
+            if let Err(e) = probe {
+                panic!(
+                    "METAL2VULKAN_SPIRV_VAL={} is set but unusable: {e}",
+                    Path::new(&path).display()
+                );
+            }
+            return true;
+        }
+        if probe.is_err() {
+            use std::io::Write;
+            let _ = writeln!(
+                std::io::stderr(),
+                "note: spirv-val not found (set METAL2VULKAN_SPIRV_VAL or put it on PATH); \
+                 tests are skipping SPIR-V validation"
+            );
+            return false;
+        }
+        true
+    })
+}
+
 /// A scratch path inside `tmp` that no other caller can be using.
 ///
 /// `tmp` is caller-supplied and callers do share one: parallel tests, a sweep's worker threads, and
@@ -473,7 +508,7 @@ mod tests {
     /// fine; that is a false alarm the reader has no way to tell from a real one.
     #[test]
     fn concurrent_validations_sharing_one_scratch_directory_do_not_collide() {
-        if Command::new("spirv-val").arg("--version").output().is_err() {
+        if !spirv_val_available() {
             return;
         }
         let module = crate::translate_sanitized_native(

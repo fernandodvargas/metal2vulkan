@@ -125,11 +125,7 @@ declare float @llvm.minnum.f32(float, float)
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
     assert!(!asm.contains("llvm.maxnum"), "{asm}");
     assert!(!asm.contains("llvm.minnum"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -165,11 +161,7 @@ declare i32 @air.clamp.s.i32(i32, i32, i32)
     assert!(asm.contains(" SClamp "), "{asm}");
     assert!(!asm.contains(" FClamp "), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -210,11 +202,7 @@ declare <3 x i8> @air.abs_diff.u.v3i8(<3 x i8>, <3 x i8>)
     assert!(asm.contains(" UMin "), "{asm}");
     assert!(asm.contains("OpISub"), "{asm}");
     assert!(!asm.contains("abs_diff"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -338,11 +326,7 @@ declare i32 @air.pack.unorm4x8.v4f16(<4 x half>)
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpFConvert"), "{asm}");
     assert!(asm.contains("PackUnorm4x8"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -382,11 +366,7 @@ declare void @air.simdgroup_matrix_8x8_store.v64f32.p1f32(<64 x float>, ptr addr
     // 64 gathered loads and 64 scattered stores, all at float.
     assert_eq!(asm.matches("OpLoad").count(), 64, "{asm}");
     assert_eq!(asm.matches("OpStore").count(), 64, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
     let _ = std::fs::remove_dir_all(tmp);
@@ -429,11 +409,7 @@ declare void @air.simdgroup_matrix_8x8_store.v64f16.p1f16(<64 x half>, ptr addrs
     assert_eq!(asm.matches("OpFMul").count(), 512, "{asm}");
     assert_eq!(asm.matches("OpFAdd").count(), 512, "{asm}");
     assert_eq!(asm.matches("OpFConvert").count(), 0, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
     let _ = std::fs::remove_dir_all(tmp);
@@ -492,11 +468,7 @@ declare bfloat @air.convert.f.bf16.s.{ty}({ty})
     assert!(asm.contains("OpConvertSToF"), "{asm}");
     assert!(!asm.contains("OpConvertFToS"), "{asm}");
 
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&wide, &tmp).expect("spirv-val");
         tools::spirv_val_bytes(&narrow, &tmp).expect("spirv-val");
     }
@@ -569,11 +541,7 @@ declare <{lanes} x {elem}> @air.convert.f.v{lanes}{air_elem}.f.v{lanes}f16(<{lan
     // what the `spirv-val` run below is really checking.
     assert_eq!(asm.matches("OpCompositeConstruct").count(), 3, "{asm}");
 
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&wide, &tmp).expect("spirv-val wide half->bfloat");
         tools::spirv_val_bytes(&bits, &tmp).expect("spirv-val wide half->float");
     }
@@ -622,11 +590,7 @@ declare bfloat @air.convert.f.bf16.f.f32(float)
     assert!(asm.contains("OpShiftRightLogical"), "{asm}");
     // The float->sint convert now sees a real float input.
     assert!(asm.contains("OpConvertFToS"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -696,11 +660,7 @@ declare <2 x i8> @air.convert.u.v2i8.f.v2f32(<2 x float>)
     assert_eq!(asm.matches("OpConvertFToU").count(), 3, "{asm}");
     assert_eq!(asm.matches("OpConvertFToS").count(), 2, "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -741,11 +701,7 @@ declare float @air.fast_pow.f32(float, float)
     assert!(asm.contains("OpLogicalAnd"), "{asm}");
     assert!(asm.contains("OpSelect"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -786,11 +742,7 @@ declare <3 x half> @air.pow.v3f16(<3 x half>, <3 x half>)
     assert!(asm.contains("OpLogicalAnd"), "{asm}");
     assert!(asm.contains("OpSelect"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -833,11 +785,7 @@ entry:
     assert!(asm.contains("OpShiftRightLogical"), "{asm}");
     // spirv-val is the authoritative check: it rejects an `OpFAdd` whose result type is an integer
     // vector ("Expected floating scalar or vector type"), which is exactly the bug this guards.
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -884,11 +832,7 @@ entry:
     assert!(asm.contains("OpFOrdLessThanEqual"), "{asm}");
     assert!(asm.contains("OpCompositeExtract"), "{asm}");
     assert!(asm.contains("OpCompositeConstruct"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -962,11 +906,7 @@ declare <2 x i32> @air.convert.s.v2i32.s.v2i16(<2 x i16>)
     assert!(asm.contains("OpUConvert"), "{asm}");
     assert!(asm.contains("OpSConvert"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1010,11 +950,7 @@ declare <2 x i16> @air.convert.s.v2i16.u.v2i32(<2 x i32>)
             .any(|line| line.contains(" OpBitcast ") && line.contains("v2ushort")),
         "{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1050,11 +986,7 @@ declare i16 @air.convert.s.i16.u.i16(i16)
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpCopyObject"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1100,11 +1032,7 @@ entry:
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpInBoundsAccessChain"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1329,11 +1257,7 @@ declare bfloat @llvm.fmuladd.bf16(bfloat, bfloat, bfloat)
     assert!(asm.contains("OpBitcast"), "{asm}");
     assert!(asm.contains("OpUConvert"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -1391,11 +1315,7 @@ entry:
         assert_eq!(insts[0].result_type, Some(float_ty), "{op:?}\n{asm}");
         assert_ne!(insts[0].result_type, Some(ushort_ty), "{op:?}\n{asm}");
     }
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -1433,11 +1353,7 @@ entry:
         std::process::id()
     ));
     let _ = std::fs::create_dir_all(&tmp);
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         let out = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
@@ -1624,11 +1540,7 @@ join:
     );
     assert!(!asm.contains("OpVectorShuffle"), "{asm}");
     assert!(asm.contains("OpCompositeExtract"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1686,11 +1598,7 @@ entry:
     ));
     let _ = std::fs::create_dir_all(&tmp);
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1922,11 +1830,7 @@ declare i32 @air.popcount.i32(i32)
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpBitCount"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -1959,11 +1863,7 @@ declare i32 @llvm.ctpop.i32(i32)
     assert!(asm.contains("OpBitCount"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
     assert!(!asm.contains("llvm_ctpop"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2029,11 +1929,7 @@ declare i64 @air.popcount.i64(i64)
     assert!(asm.contains("OpShiftRightLogical"), "{asm}");
     assert!(asm.contains("OpIAdd"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2121,11 +2017,7 @@ declare <2 x i64> @air.popcount.v2i64(<2 x i64>)
     assert!(asm.contains("OpShiftRightLogical"), "{asm}");
     assert!(asm.contains("OpIAdd"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2167,11 +2059,7 @@ declare <3 x float> @air.fast_log2.v3f32(<3 x float>)
     assert!(!asm.contains(" Exp "), "{asm}");
     assert!(!asm.contains(" Log "), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2223,11 +2111,7 @@ declare <4 x float> @air.mix.v4f32(<4 x float>, <4 x float>, <4 x float>)
     assert_eq!(asm.matches("OpFOrdEqual").count(), 0, "{asm}");
     assert_eq!(asm.matches("OpSelect").count(), 0, "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2307,11 +2191,7 @@ declare <4 x float> @air.fast_powr.v4f32(<4 x float>, <4 x float>)
     assert!(asm.contains(" Pow "), "{asm}");
     assert!(asm.contains("OpFMul"), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2404,11 +2284,7 @@ declare <2 x float> @air.fast_exp10.v2f32(<2 x float>)
     // exp10 and the float-vector exp10 add none.
     assert_eq!(asm.matches("OpFConvert").count(), 3, "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2488,11 +2364,7 @@ declare float @air.tanh.f32(float)
     // Three converts for the widened half atan2 (two in, one out), two for the half tanh, and one
     // for the fpext the fixture writes. The fast atan2 and the float tanh add none.
     assert_eq!(asm.matches("OpFConvert").count(), 6, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2542,11 +2414,7 @@ declare <3 x half> @air.pow.v3f16(<3 x half>, <3 x half>)
         "the out-of-domain arm needs a NaN constant: {asm}"
     );
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2588,11 +2456,7 @@ declare <4 x float> @air.fast_round.v4f32(<4 x float>)
     assert!(asm.contains(" Trunc "), "{asm}");
     assert_eq!(asm.matches("OpSelect").count(), 2, "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2630,11 +2494,7 @@ declare <4 x float> @air.fast_rint.v4f32(<4 x float>)
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains(" RoundEven "), "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2668,11 +2528,7 @@ declare <2 x half> @air.rint.v2f16(<2 x half>)
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpFConvert"), "{asm}");
     assert!(asm.contains(" RoundEven "), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2745,11 +2601,7 @@ entry:
         asm.matches("OpSelect").count() >= 2,
         "expected selected safe denominators for urem and srem\n{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -2994,11 +2846,7 @@ declare i32 @air.max.s.i32(i32, i32)
             "signed min/max op {glsl_op} used unsigned result type\n{asm}"
         );
     }
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }

@@ -331,7 +331,7 @@ mod tests {
         let dir = scratch();
         let path = dir.join("m.spv");
         std::fs::write(&path, spv).unwrap();
-        let status = std::process::Command::new("spirv-val")
+        let status = std::process::Command::new(crate::tools::tool_bin("spirv-val"))
             .args(["--target-env", crate::tools::VULKAN_TARGET_ENV])
             .arg(&path)
             .output()

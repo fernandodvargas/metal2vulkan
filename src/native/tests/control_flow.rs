@@ -312,11 +312,7 @@ attributes #0 = { nounwind }
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpLoad"), "{asm}");
     assert!(asm.contains("OpStore"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -359,11 +355,7 @@ exit:
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpPhi"), "{asm}");
     assert!(asm.contains("OpIEqual"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -408,11 +400,7 @@ declare float @air.fast_fmedian3.f32(float, float, float)
     assert_eq!(fmax_count, 4, "{asm}");
     assert_eq!(fmin_count, 4, "{asm}");
     assert!(!asm.contains("OpFunctionCall"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -453,11 +441,7 @@ exit:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpPhi"), "{asm}");
     assert!(asm.contains("OpIAdd"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -520,11 +504,7 @@ exit:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -589,11 +569,7 @@ exit:
     // structuring — so there are 5 selection merges. spirv-val accepts the result and semantics are
     // unchanged because OpSelectionMerge is a structural declaration, not a computation.
     assert_eq!(asm.matches("OpSelectionMerge").count(), 5, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -636,11 +612,7 @@ cont:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -687,11 +659,7 @@ exit:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -742,11 +710,7 @@ exit:
     assert!(asm.contains("OpLoopMerge"), "{asm}");
     assert!(!asm.contains("OpSwitch"), "{asm}");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -790,11 +754,7 @@ body:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpPhi"), "{asm}");
     assert!(asm.contains("OpFAdd"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -858,11 +818,7 @@ entry:
         }
     });
     assert_eq!(face_dims_offset, Some(40), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -907,11 +863,7 @@ entry:
         }),
         "{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -996,11 +948,7 @@ exit:
                     .is_some_and(|ptr| storage_ptrs.contains(&ptr))),
         "{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1072,11 +1020,7 @@ declare void @llvm.memcpy.p0.p1.i64(ptr, ptr addrspace(1), i64, i1)
         asm.matches("OpStore").count() >= 7,
         "expected the nested copy to lower to per-leaf stores: {asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -1160,11 +1104,7 @@ exit:
         })
         .count();
     assert!(v2u32_constructs >= 1, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1212,11 +1152,7 @@ declare i32 @air.atomic.global.cmpxchg.weak.i32(ptr addrspace(1), ptr, i32, i32,
         "{asm}"
     );
     assert_no_pointer_bitcasts(&spv);
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1313,11 +1249,7 @@ exit:
             );
         }
     }
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1369,11 +1301,7 @@ exit:
             .any(|line| line.contains("OpPtrAccessChain %_ptr_Workgroup_uint")),
         "{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1459,11 +1387,7 @@ m:
             .any(|line| line.contains(" OpBitcast ") && line.contains("_ptr_")),
         "{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1529,11 +1453,7 @@ merge:
             .all(|inst| inst.class.opcode != Op::Load || inst.result_type != Some(uchar)))),
         "{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
     let _ = std::fs::remove_dir_all(&tmp);
@@ -1612,11 +1532,7 @@ declare i32 @air.atomic.global.load.i32(ptr addrspace(1), i32, i32, i1)
         !asm.contains("OpVariable %_ptr_Workgroup_uint Workgroup"),
         "atomic must retain the raw StorageBuffer cursor:\n{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -1717,11 +1633,7 @@ merge:
         std::process::id()
     ));
     let _ = std::fs::create_dir_all(&tmp);
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
     let _ = std::fs::remove_dir_all(tmp);
@@ -2151,11 +2063,7 @@ declare i32 @air.atomic.global.add.u.i32(ptr addrspace(1), i32, i32, i32, i1)
     let asm = disassemble(&spv).expect("disassemble");
     let module = load_bytes(&spv).expect("load native spv");
     assert_phi_operand_types_match(&module, &asm);
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -2308,11 +2216,7 @@ exit:
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpCompositeConstruct"), "{asm}");
     assert!(!asm.contains("_ptr_Workgroup_v4float"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -2370,11 +2274,7 @@ exit:
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpCompositeConstruct"), "{asm}");
     assert!(!asm.contains("_ptr_Workgroup_v4float"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -2549,11 +2449,7 @@ merge:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpUnreachable"), "{asm}");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2768,11 +2664,7 @@ outer_merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSwitch"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2823,11 +2715,7 @@ merge:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(!asm.contains("OpSwitch"), "{asm}");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
     std::fs::remove_dir_all(&tmp).expect("remove validation scratch");
@@ -2874,11 +2762,7 @@ merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert_eq!(asm.matches("OpSwitch").count(), 2, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -2963,11 +2847,7 @@ merge:
         .collect::<Vec<_>>();
     assert_eq!(merges.len(), 2, "{asm}");
     assert_ne!(merges[0], merges[1], "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3018,11 +2898,7 @@ inner:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
     assert!(asm.contains("OpPhi"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3066,11 +2942,7 @@ exit:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert_eq!(asm.matches("OpLoopMerge").count(), 1, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3127,11 +2999,7 @@ exit:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3184,11 +3052,7 @@ exit:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
     assert!(asm.contains("OpPhi"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3231,11 +3095,7 @@ join:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpPhi"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
     std::fs::remove_dir_all(&tmp).expect("remove validation scratch");
@@ -3284,11 +3144,7 @@ exit:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3359,11 +3215,7 @@ exit:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3435,11 +3287,7 @@ exit:
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -3605,11 +3453,7 @@ merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3663,11 +3507,7 @@ merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3711,11 +3551,7 @@ merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -3749,11 +3585,7 @@ merge:
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&spv).expect("disassemble");
     assert_eq!(asm.matches("OpFAdd").count(), 3, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -3803,11 +3635,7 @@ merge:
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpPhi"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -4034,11 +3862,7 @@ merge:
     let out = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&out).expect("disassemble");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4081,11 +3905,7 @@ merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert_eq!(asm.matches("OpSelectionMerge").count(), 2, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4128,11 +3948,7 @@ exit:
     let asm = disassemble(&out).expect("disassemble transformed");
     let selection_merges = asm.matches("OpSelectionMerge").count();
     assert!(selection_merges >= 1, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4185,11 +4001,7 @@ merge:
     let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp).expect("translate");
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -4233,11 +4045,7 @@ merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4275,11 +4083,7 @@ exit:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4325,11 +4129,7 @@ merge:
         .collect::<Vec<_>>();
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4389,11 +4189,7 @@ merge:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert_eq!(asm.matches("OpBranchConditional").count(), 4, "{asm}");
     assert_eq!(asm.matches("OpSelectionMerge").count(), 4, "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4438,11 +4234,7 @@ merge:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4487,11 +4279,7 @@ cont:
     let asm = disassemble(&out).expect("disassemble transformed");
     assert!(asm.contains("OpSelectionMerge"), "{asm}");
     assert!(asm.contains("OpLoopMerge"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }
@@ -4695,11 +4483,7 @@ no:
     let asm = disassemble(&spv).expect("disassemble");
     assert!(asm.contains("OpFOrdLessThan"), "{asm}");
     assert!(asm.contains("OpSelect"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -4926,11 +4710,7 @@ entry:
     assert!(asm.contains("ArrayStride 28"), "{asm}");
     assert!(asm.contains("OpTypeArray"), "{asm}");
     assert!(asm.contains("OpInBoundsAccessChain"), "{asm}");
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -5002,11 +4782,7 @@ def:
             && l.contains(" 1 ")),
         "switch cases must be low-bit encodings 3/2/1, not sign-extended -1/-2:\n{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
     }
 }
@@ -5048,11 +4824,7 @@ entry:
         !asm.contains("OpUConvert"),
         "i24 and i32 share one emitted storage type, so conversion must be valid at construction:\n{asm}"
     );
-    if std::process::Command::new("spirv-val")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if crate::tools::spirv_val_available() {
         tools::spirv_val_bytes(&out, &tmp).expect("spirv-val");
     }
 }

@@ -2710,10 +2710,10 @@ mod tests {
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         let tmp = std::env::temp_dir().join(format!("m2v_vsel_{}.spv", std::process::id()));
         std::fs::write(&tmp, &bytes).unwrap();
-        let out = std::process::Command::new("spirv-val")
+        let out = std::process::Command::new(crate::tools::tool_bin("spirv-val"))
             .arg(&tmp)
             .output()
-            .expect("spirv-val on PATH");
+            .expect("spirv-val (PATH or METAL2VULKAN_SPIRV_VAL)");
         let _ = std::fs::remove_file(&tmp);
         assert!(
             out.status.success(),
@@ -2843,10 +2843,10 @@ mod tests {
         let tmp =
             std::env::temp_dir().join(format!("m2v_vsel_mixed_byte_{}.spv", std::process::id()));
         std::fs::write(&tmp, &bytes).unwrap();
-        let out = std::process::Command::new("spirv-val")
+        let out = std::process::Command::new(crate::tools::tool_bin("spirv-val"))
             .arg(&tmp)
             .output()
-            .expect("spirv-val on PATH");
+            .expect("spirv-val (PATH or METAL2VULKAN_SPIRV_VAL)");
         let _ = std::fs::remove_file(&tmp);
         assert!(
             out.status.success(),
@@ -2987,10 +2987,10 @@ mod tests {
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         let tmp = std::env::temp_dir().join(format!("m2v_vstore_{}.spv", std::process::id()));
         std::fs::write(&tmp, &bytes).unwrap();
-        let out = std::process::Command::new("spirv-val")
+        let out = std::process::Command::new(crate::tools::tool_bin("spirv-val"))
             .arg(&tmp)
             .output()
-            .expect("spirv-val on PATH");
+            .expect("spirv-val (PATH or METAL2VULKAN_SPIRV_VAL)");
         let _ = std::fs::remove_file(&tmp);
         assert!(
             out.status.success(),
