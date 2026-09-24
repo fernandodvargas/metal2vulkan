@@ -107,7 +107,7 @@ pub enum FragRole {
     /// A texture argument the variant this module describes declares no slot for, so no descriptor
     /// exists for it. Metal reads zero through such a resource and stores nowhere; naming the role
     /// is what lets the lowering tell that operand apart from a handle it merely lost track of.
-    /// See [`variant_texture_slot`].
+    /// See `variant_texture_slot`.
     VariantAbsentTexture,
     /// Anything we don't model.
     Other,
@@ -432,7 +432,7 @@ pub enum VertRole {
     /// A texture argument the variant this module describes declares no slot for, so no descriptor
     /// exists for it. Metal reads zero through such a resource and stores nowhere; naming the role
     /// is what lets the lowering tell that operand apart from a handle it merely lost track of.
-    /// See [`variant_texture_slot`].
+    /// See `variant_texture_slot`.
     VariantAbsentTexture,
     Other,
 }
@@ -714,7 +714,7 @@ pub enum KernRole {
     /// A texture argument the variant this module describes declares no slot for, so no descriptor
     /// exists for it. Metal reads zero through such a resource and stores nowhere; naming the role
     /// is what lets the lowering tell that operand apart from a handle it merely lost track of.
-    /// See [`variant_texture_slot`].
+    /// See `variant_texture_slot`.
     VariantAbsentTexture,
     Other,
 }
