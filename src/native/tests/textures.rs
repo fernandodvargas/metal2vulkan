@@ -1185,6 +1185,102 @@ declare { <4 x float>, i8 } @air.sample_texture_2d.v4f32(ptr addrspace(1), ptr a
 }
 
 #[test]
+fn native_sampler_in_nested_wrapper_of_returned_aggregate_keeps_its_argument_binding() {
+    // A helper returns a struct whose members are single-pointer `texture2d` / `sampler` wrappers;
+    // the caller extracts each wrapper (a sub-aggregate) and a second helper extracts the handle.
+    // The sampler must stay the `[[sampler(0)]]` argument, not an unrecovered payload slot.
+    let ll = r#"
+target triple = "spirv-unknown-vulkan1.2"
+%TextureRef = type { ptr addrspace(1) }
+%SamplerRef = type { ptr addrspace(2) }
+%Source = type { %TextureRef, %SamplerRef, <2 x float> }
+
+define void @k(ptr addrspace(1) %texture, ptr addrspace(2) %sampler, ptr addrspace(1) %out) {
+entry:
+  %source = call fastcc %Source @build(ptr addrspace(1) %texture, ptr addrspace(2) %sampler, <2 x float> zeroinitializer)
+  %texture_ref = extractvalue %Source %source, 0
+  %sampler_ref = extractvalue %Source %source, 1
+  %coord = extractvalue %Source %source, 2
+  %color = call fastcc <4 x float> @sample_helper(%TextureRef %texture_ref, %SamplerRef %sampler_ref, <2 x float> %coord)
+  store <4 x float> %color, ptr addrspace(1) %out, align 16
+  ret void
+}
+
+define internal fastcc %Source @build(ptr addrspace(1) %texture, ptr addrspace(2) %sampler, <2 x float> %coord) {
+  %with_texture = insertvalue %Source poison, ptr addrspace(1) %texture, 0, 0
+  %with_sampler = insertvalue %Source %with_texture, ptr addrspace(2) %sampler, 1, 0
+  %source = insertvalue %Source %with_sampler, <2 x float> %coord, 2
+  ret %Source %source
+}
+
+define internal fastcc <4 x float> @sample_helper(%TextureRef %texture_ref, %SamplerRef %sampler_ref, <2 x float> %coord) {
+  %texture = extractvalue %TextureRef %texture_ref, 0
+  %sampler = extractvalue %SamplerRef %sampler_ref, 0
+  %sample = call { <4 x float>, i8 } @air.sample_texture_2d.v4f32(ptr addrspace(1) %texture, ptr addrspace(2) %sampler, <2 x float> %coord, i1 true, <2 x i32> zeroinitializer, i1 false, float 0.000000e+00, float 0.000000e+00, i32 0)
+  %color = extractvalue { <4 x float>, i8 } %sample, 0
+  ret <4 x float> %color
+}
+
+declare { <4 x float>, i8 } @air.sample_texture_2d.v4f32(ptr addrspace(1), ptr addrspace(2), <2 x float>, i1, <2 x i32>, i1, float, float, i32)
+
+!air.kernel = !{!0}
+!0 = !{ptr @k, !1, !2}
+!1 = !{}
+!2 = !{!3, !4, !5}
+!3 = !{i32 0, !"air.texture", !"air.location_index", i32 0, i32 1, !"air.sample", !"air.arg_type_name", !"texture2d<float, sample>", !"air.arg_name", !"texture"}
+!4 = !{i32 1, !"air.sampler", !"air.location_index", i32 0, i32 1, !"air.arg_type_name", !"sampler", !"air.arg_name", !"sampler"}
+!5 = !{i32 2, !"air.buffer", !"air.location_index", i32 0, i32 1, !"air.write", !"air.address_space", i32 1, !"air.arg_type_size", i32 16, !"air.arg_type_align_size", i32 16, !"air.arg_type_name", !"float4", !"air.arg_name", !"out"}
+"#;
+    let tmp = std::env::temp_dir().join(format!(
+        "metal2vulkan_nested_wrapper_sampler_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::create_dir_all(&tmp);
+    let spv = crate::translate_sanitized_native(ll, Stage::Kernel, &tmp)
+        .expect("translate sampler carried through a nested wrapper of a returned aggregate");
+    let module = load_bytes(&spv).expect("load translated module");
+    let sampler_var = module
+        .annotations
+        .iter()
+        .find(|inst| {
+            inst.class.opcode == Op::Decorate
+                && inst.operands.get(1) == Some(&Operand::Decoration(Decoration::Binding))
+                && inst.operands.get(2)
+                    == Some(&Operand::LiteralBit32(crate::reflect::SAMPLER_BINDING_BASE))
+        })
+        .and_then(|inst| match inst.operands.first() {
+            Some(Operand::IdRef(id)) => Some(*id),
+            _ => None,
+        })
+        .expect("the [[sampler(0)]] argument keeps its descriptor binding");
+    let body = module
+        .functions
+        .iter()
+        .flat_map(|func| func.blocks.iter())
+        .flat_map(|block| block.instructions.iter())
+        .collect::<Vec<_>>();
+    let sampled_images = body
+        .iter()
+        .filter(|inst| inst.class.opcode == Op::SampledImage)
+        .collect::<Vec<_>>();
+    assert_eq!(sampled_images.len(), 1);
+    let Some(Operand::IdRef(sampler_operand)) = sampled_images[0].operands.get(1) else {
+        panic!("OpSampledImage sampler operand");
+    };
+    let sampler_load = body
+        .iter()
+        .find(|inst| inst.result_id == Some(*sampler_operand))
+        .expect("sampler operand definition");
+    assert_eq!(sampler_load.class.opcode, Op::Load);
+    assert_eq!(
+        sampler_load.operands.first(),
+        Some(&Operand::IdRef(sampler_var))
+    );
+    tools::spirv_val_bytes(&spv, &tmp).expect("spirv-val");
+    let _ = std::fs::remove_dir_all(tmp);
+}
+
+#[test]
 fn native_texture_and_sampler_binding_bands_cover_high_and_last_abi_indices() {
     let ll = r#"
 target triple = "spirv-unknown-vulkan1.2"

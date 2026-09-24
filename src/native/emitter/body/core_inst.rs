@@ -991,6 +991,41 @@ impl Emitter {
         let result_type = self.type_id(&result_ty)?;
         let result = self.result_id(&name, &result_ty)?;
         let composite_id = self.value_id_in(&composite.value, &composite.ty, instructions)?;
+        // A sub-aggregate extract keeps the exact logical pointers its source retained below the
+        // extracted path, exactly as `insertvalue` nests them. Without this a pointer stored two
+        // levels deep (e.g. a `metal::sampler` wrapper inside a returned struct) reaches its final
+        // `extractvalue` as the integer payload slot instead of the resource it names.
+        if let LlValue::Local(composite_name) = &composite.value {
+            let nested = self
+                .aggregate_pointer_values
+                .get(composite_name)
+                .map(|pointers| {
+                    pointers
+                        .iter()
+                        .filter_map(|(path, pointer)| {
+                            path.strip_prefix(indices)
+                                .filter(|suffix| !suffix.is_empty())
+                                .map(|suffix| (suffix.to_vec(), pointer.clone()))
+                        })
+                        .collect::<HashMap<_, _>>()
+                })
+                .unwrap_or_default();
+            if !self.bda_device_pointers {
+                for (path, pointer) in &nested {
+                    let source = self.value_id_in(&pointer.value, &pointer.ty, instructions)?;
+                    self.emit_sidecar.aggregate_pointer_values.push(
+                        crate::emit_sidecar::AggregatePointerValue {
+                            aggregate: result,
+                            source,
+                            indices: path.clone(),
+                        },
+                    );
+                }
+            }
+            if !nested.is_empty() {
+                self.aggregate_pointer_values.insert(name.clone(), nested);
+            }
+        }
         if self.bda_device_pointers {
             if let LlValue::Local(composite_name) = &composite.value {
                 if let Some(addresses) = self.bda_aggregate_addresses.get(composite_name).cloned() {
